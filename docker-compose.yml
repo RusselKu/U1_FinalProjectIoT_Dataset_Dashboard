@@ -1,60 +1,56 @@
 services:
-  # MQTT Broker (Mosquitto)
-  mosquitto:
-    image: eclipse-mosquitto:2.0
-    container_name: mosquitto
-    ports:
-      - "1883:1883"
-      - "9001:9001"
-    volumes:
-      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
-      - mosquitto_data:/mosquitto/data
-      - mosquitto_logs:/mosquitto/log
-    networks:
-      - data_pipeline_net
-    restart: always
-
-  # PostgreSQL Database
-  postgres:
+  postgres_db:
     image: postgres:13
     container_name: postgres_db
     environment:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
       POSTGRES_DB: sensordata
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
       - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d sensordata"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - data_pipeline_net
-    restart: always
 
-  # Python Subscriber Service
-  subscriber:
+  ingestion:
     build:
-      context: ./subscriber
-    container_name: subscriber
-    depends_on:
-      - mosquitto
-      - postgres
+      context: .
+      dockerfile: Dockerfile
+    container_name: ingestion
+    env_file:
+      - .env
     environment:
-      - MQTT_BROKER=mosquitto
-      - MQTT_PORT=1883
       - DB_HOST=postgres_db
-      - DB_PORT=5432
-      - DB_NAME=sensordata
-      - DB_USER=user
-      - DB_PASSWORD=password
+    depends_on:
+      postgres_db:
+        condition: service_healthy
     networks:
       - data_pipeline_net
-    restart: always
+    # Comando para ejecutar el script en un bucle cada hora
+    command: sh -c "while true; do python run_publisher.py; echo 'Ingesta completada, esperando 1 hora para la próxima ejecución.'; sleep 3600; done"
 
-volumes:
-  postgres_data:
-  mosquitto_data:
-  mosquitto_logs:
+  streamlit:
+    build:
+      context: ./streamlit_app
+    container_name: streamlit_app
+    ports:
+      - "8501:8501"
+    env_file:
+      - .env
+    environment:
+      - DB_HOST=postgres_db
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+      # Ya no dependemos de que 'ingestion' termine, sino de que 'postgres_db' esté lista
+    networks:
+      - data_pipeline_net
 
 networks:
   data_pipeline_net:

@@ -1,0 +1,475 @@
+Librería data información 
+
+
+
+
+
+    About OpenAQ Python
+    Tutorial
+
+Getting started
+
+In this tutorial, we will learn how to install and setup the OpenAQ Python SDK and query a location from the OpenAQ API.
+Install OpenAQ Python
+
+With Python and pip installed on our system we can install the OpenAQ Python SDK via pip.
+
+pip
+ install openaq
+
+Register for an OpenAQ API Key
+
+Visit explore.openaq.org/register.
+
+Warning
+
+For this tutorial we will use a placeholder API Key: 'replace-with-a-valid-openaq-api-key'. Do not use this API key in your code, it will not work. Replace the placeholder value with the key you receive after signing up.
+The Code
+
+We will now walkthrough the following code to access a single monitoring location from the OpenAQ API.
+
+Note
+
+The OpenAQ Python SDK provide synchronous and asynchronous options. For this walkthrough we will use just the synchronous client for simplicity.
+
+from openaq import OpenAQ
+
+client = OpenAQ(api_key='replace-with-a-valid-openaq-api-key')
+
+location = client.locations.get(2178)
+
+client.close()
+
+print(location)
+
+Step 1: Import the OpenAQ class from openaq
+
+from openaq import OpenAQ
+
+client = OpenAQ(api_key='replace-with-a-valid-openaq-api-key')
+
+location = client.locations.get(2178)
+
+client.close()
+
+print(location)
+
+OpenAQ is a Python class that provides access to communicate with API resources.
+Step 2: Instantiate the client
+
+from openaq import OpenAQ
+
+client = OpenAQ(api_key='replace-with-a-valid-openaq-api-key')
+
+location = client.locations.get(2178)
+
+client.close()
+
+print(location)
+
+Here the client variable will be an instance of the class OpenAQ.
+
+This will be the main variable we will use to interact with API.
+Step 3: Call the locations get with a locations ID of 2178
+
+from openaq import OpenAQ
+
+client = OpenAQ(api_key='replace-with-a-valid-openaq-api-key')
+
+location = client.locations.get(2178)
+
+client.close()
+
+print(location)
+
+Within the client we access the locations resource and call the get method to retrieve a single location by its ID
+Step 4: Close the client connection
+
+from openaq import OpenAQ
+
+client = OpenAQ(api_key='replace-with-a-valid-openaq-api-key')
+
+location = client.locations.get(2178)
+
+client.close()
+
+print(location)
+
+We close the client to ensure connections are properly cleaned up.
+Step 5: Print the results
+
+from openaq import OpenAQ
+
+client = OpenAQ(api_key='replace-with-a-valid-openaq-api-key')
+
+location = client.locations.get(2178)
+
+client.close()
+
+print(location)
+
+We print the results to our console to see the data from the requested location.
+
+The output should look something like this:
+
+LocationsResponse(meta=Meta(name='openaq-api', website='/', page=1, limit=100, found=1), results=[Location(id=2178, name='Del Norte', locality='Albuquerque', timezone='America/Denver', country=CountryBase(id=13, code='US', name='United States of America'), owner=OwnerBase(id=4, name='Unknown Governmental Organization'), provider=ProviderBase(id=119, name='AirNow'), is_mobile=False, is_monitor=True, instruments=[InstrumentBase(id=2, name='Government Monitor')], sensors=[SensorBase(id=3917, name='o3 ppm', parameter=ParameterBase(id=10, name='o3', units='ppm', display_name='O₃')), SensorBase(id=3916, name='no2 ppm', parameter=ParameterBase(id=7, name='no2', units='ppm', display_name='NO₂')), SensorBase(id=25227, name='co ppm', parameter=ParameterBase(id=8, name='co', units='ppm', display_name='CO')), SensorBase(id=3919, name='pm10 µg/m³', parameter=ParameterBase(id=1, name='pm10', units='µg/m³', display_name='PM10')), SensorBase(id=4272226, name='no ppm', parameter=ParameterBase(id=35, name='no', units='ppm', display_name='NO')), SensorBase(id=4272103, name='nox ppm', parameter=ParameterBase(id=19840, name='nox', units='ppm', display_name='NOx')), SensorBase(id=3918, name='so2 ppm', parameter=ParameterBase(id=9, name='so2', units='ppm', display_name='SO₂')), SensorBase(id=3920, name='pm25 µg/m³', parameter=ParameterBase(id=2, name='pm25', units='µg/m³', display_name='PM2.5'))], coordinates=Coordinates(latitude=35.1353, longitude=-106.584702), bounds=[-106.584702, 35.1353, -106.584702, 35.1353], distance=None, datetime_first=Datetime(utc='2016-03-06T19:00:00+00:00', local='2016-03-06T12:00:00-07:00'), datetime_last=Datetime(utc='2023-10-31T13:00:00+00:00', local='2023-10-31T07:00:00-06:00'))])
+
+Conclusion
+
+You have now successfully requested and downloaded data from the OpenAQ API with the OpenAQ Python SDK. To learn more check out the how-to guides and reference documentation.
+
+Register for an OpenAQ API Key
+
+Visit explore.openaq.org/register.
+
+Warning
+
+For this tutorial we will use a placeholder API Key: 'replace-with-a-valid-openaq-api-key'. Do not use this API key in your code, it will not work. Replace the placeholder value with the key you receive after signing up.
+The Code
+
+We will now walkthrough the following code to access a single monitoring location from the OpenAQ API.
+
+Note
+
+The OpenAQ Python SDK provide synchronous and asynchronous options. For this walkthrough we will use just the synchronous client for simplicity.
+
+from openaq import OpenAQ
+
+client = OpenAQ(api_key='replace-with-a-valid-openaq-api-key')
+
+location = client.locations.get(2178)
+
+client.close()
+
+print(location)
+
+Step 1: Import the OpenAQ class from openaq
+
+from openaq import OpenAQ
+
+client = OpenAQ(api_key='replace-with-a-valid-openaq-api-key')
+
+location = client.locations.get(2178)
+
+client.close()
+
+print(location)
+
+OpenAQ is a Python class that provides access to communicate with API resources.
+Step 2: Instantiate the client
+
+from openaq import OpenAQ
+
+client = OpenAQ(api_key='replace-with-a-valid-openaq-api-key')
+
+location = client.locations.get(2178)
+
+client.close()
+
+print(location)
+
+Here the client variable will be an instance of the class OpenAQ.
+
+This will be the main variable we will use to interact with API.
+Step 3: Call the locations get with a locations ID of 2178
+
+from openaq import OpenAQ
+
+client = OpenAQ(api_key='replace-with-a-valid-openaq-api-key')
+
+location = client.locations.get(2178)
+
+client.close()
+
+print(location)
+
+Within the client we access the locations resource and call the get method to retrieve a single location by its ID
+Step 4: Close the client connection
+
+from openaq import OpenAQ
+
+client = OpenAQ(api_key='replace-with-a-valid-openaq-api-key')
+
+location = client.locations.get(2178)
+
+client.close()
+
+print(location)
+
+We close the client to ensure connections are properly cleaned up.
+Step 5: Print the results
+
+from openaq import OpenAQ
+
+client = OpenAQ(api_key='replace-with-a-valid-openaq-api-key')
+
+location = client.locations.get(2178)
+
+client.close()
+
+print(location)
+
+We print the results to our console to see the data from the requested location.
+
+The output should look something like this:
+
+LocationsResponse(meta=Meta(name='openaq-api', website='/', page=1, limit=100, found=1), results=[Location(id=2178, n
+Create an instance of the client
+
+OpenAQ Python provides a synchronous client via the OpenAQ class and an asynchronous client via the AsyncOpenAQ class, for working with async/await within event loops. This guide will show the options on how to create an instance of the client class.
+Sync
+Async
+
+from openaq import OpenAQ
+
+client = OpenAQ(api_key='replace-with-a-valid-openaq-api-key')
+
+The OpenAQ API key can be passed directly as an argument on the creation of the client as shown above. Alternatively, we can use the OPENAQ_API_KEY environment variable to set the api_key value without directly setting the value on client instantiation. e.g.:
+
+OPENAQ_API_KEY=my-openaq-api-key python main.py
+
+Where main.py is something like:
+Sync
+Async
+main.py
+
+from openaq import OpenAQ
+
+client = OpenAQ()
+# client.api_key will be 'my-openaq-api-key per' the OPENAQ_API_KEY
+# environment variable
+
+Setting the API key via the client class argument on instantiation will also supercede the implicit setting of api_key through the OPENAQ_API_KEY environment variable.
+
+openaq uses httpx under-the-hood to make http calls to the OpenAQ API. The OpenAQ client follows the same pattern as httpx for opening and closing connections. Once the client is instantiated an httpx.Client (or httpx.AsyncClient) is opened and must be explicitly closed after use. This allows for more efficient usage of network resources by maintaining an open connection.
+Sync
+Async
+
+from openaq import OpenAQ
+
+client = OpenAQ(api_key='replace-with-a-valid-openaq-api-key')
+client.locations.get(2178)
+client.close()
+
+Alternatively, we can use a context manager to handle closing the connection for us:
+Sync
+Async
+
+from openaq import OpenAQ
+
+with OpenAQ(api_key='replace-with-a-valid-openaq-api-key') as client:
+    
+client.locations.get(2178)
+
+API key
+
+An API Key is required to make requests with the OpenAQ API.
+
+We can add an API Key to OpenAQ Python one of two ways. As shown above, the API key string can be directly passed when instantiating the OpenAQ or AsyncOpenAQ class via the api_key argument. Alternatively, if a key is not passed to the constructor OpenAQ and AsyncOpenAQ will automatically look for a system environment variable named OPENAQ-API-KEY and set the value of that to the api_key argument. Directly passing a value to the api_key argument in the client constructors will always override an environment variable.
+
+
+Paging results
+
+The OpenAQ API supports pagination to allow fetching of large amounts of data through smaller pages of results. Pagination is controlled through the page and limit query parameters. All resource list() methods in OpenAQ Python provide access to these query parameters through keyword arguments. These values default to page=1 and limit=100. The limit parameter has a maximum value of 1,000.
+
+For small result sets, we can use the found value from the response meta object to find the total number of pages to loop through.
+
+from math import ceil
+
+from openaq import OpenAQ
+
+client = OpenAQ(api_key='replace-with-a-valid-openaq-api-key')
+
+locations = client.locations.list()
+meta = locations.meta
+found = meta.found
+
+limit = 1000
+
+pages = ceil(found/limit)
+
+for page in pages:
+    
+locations.client.list(limit=limit, page=page)
+
+client.close()
+
+We can then divide the value in found by the chosen limit value and round up any remainder with math.ceil to get the total number of pages. We can then use that value to loop through all the result pages.
+
+from math import ceil
+
+from openaq import OpenAQ
+
+client = OpenAQ(api_key='replace-with-a-valid-openaq-api-key')
+
+locations = client.locations.list()
+meta = locations.meta
+found = meta.found
+
+limit = 1000
+
+pages = ceil(found/limit)
+
+for page in pages:
+    client.locations.list(limit=limit, page=page)
+
+client.close()
+
+For large result sets such as in measurements the meta found value will provide an estimate, not the actual number of results. For this we can use a different pattern, looping through the pages until we encounter a page with no results.
+
+from openaq import OpenAQ
+
+client = OpenAQ(api_key='replace-with-a-valid-openaq-api-key')
+
+locations = client.measurements.list()
+
+limit = 1000
+
+results = True
+
+page_num = 1
+
+while results:
+    
+measurements = client.measurements.list(limit=limit, page=page_num)
+    if len(measurements.results) == 0:
+        results = False
+    page_num += 1
+
+client.close()
+
+Geospatial Queries
+
+The OpenAQ API provides two methods for querying features with geospatial features:
+
+    Point and radius
+    Bounding box
+
+The API documentation describes these methods in detail at: https://docs.openaq.org/using-the-api/geospatial.
+
+Warning
+
+The query parameters for coordiantes and radius cannot be used with the bbox, only one method can be used in a single call. Mixing methods will result in a ValidationError exception.
+Point and radius
+
+The locations.list() function exposes the point and radius parameters through function parameters named radius and coordinates. The coordinates parameter takes a tuple of floats representing the center point and the radius value represents the distance in meters to search around the the coordinates point. The coordinates point tuple accepts WGS84 coordinates in the form latitude, longitude (Y,X).
+Sync
+Async
+
+import pprint
+
+from openaq import OpenAQ
+
+
+client = OpenAQ(api_key='replace-with-a-valid-openaq-api-key')
+locations = client.locations.list(
+    
+coordinates=(13.74433, 100.54365),
+    
+radius=10_000,
+    
+limit=1000
+)
+pprint.pp(locations)
+client.close()
+
+This will print a list of locations (up to 1,000 per page) within a 10 kilometer radius of the point 13.74433,100.54365, a point in central Bangkok, Thailand.
+Bounding box
+
+The locations.list() function also exposes the bounding box parameter through a function parameters named bbox. A bounding box represented a rectangular area represented as a list of WGS84 coordinate values in the order: minimum X, minimum Y, maximum X, maximum Y.
+Sync
+Async
+
+import pprint
+
+from openaq import OpenAQ
+
+
+client = OpenAQ(api_key="replace-with-a-valid-openaq-api-key")
+locations = client.locations.list(
+    
+bbox=(5.488869, -0.396881, 5.732144, -0.021973), limit=1000
+)
+pprint.pp(locations)
+client.close()
+
+Generating a bounding box from a polygon
+
+We can generate a bounding box from an aribtrary polygon from a file, such as GeoJSON or Shapefile.
+
+pip
+ install shapely
+
+Info
+
+For this example we use shapely but there are many libraries that can provide similar functionality to read and process geospatial data in Python.
+
+For this example
+Sync
+Async
+
+from openaq import OpenAQ
+import httpx
+import shapely
+
+
+client = OpenAQ(api_key="replace-with-a-valid-openaq-api-key")
+
+res = httpx.get("https://maps.lacity.org/lahub/rest/services/Boundaries/MapServer/7/query?outFields=*&where=1%3D1&f=geojson")
+
+los_angeles = shapely.from_geojson(res.text)
+
+locations = client.locations.list(
+    
+bbox=los_angles.bounds, limit=1000
+)
+pprint.pp(locations)
+client.close()
+
+Working with API rate limits
+
+OpenAQ limits the number of API requests you can make in a set time to ensure fair access for all users and prevent overuse.
+
+A more detailed overview of the API rate limits is also available at the main documentation site:
+
+https://docs.openaq.org/using-the-api/rate-limits
+
+With each response the OpenAQ API returns HTTP headers with rate limit information. The OpenAQ Python SDK also exposes these values through the headers field in the response object.
+
+>>> from openaq import OpenAQ
+...
+>>> client = OpenAQ()
+>>> locations = client.locations.list()
+>>> print(locations.headers)
+Headers(
+    x_ratelimit_limit=60,
+    x_ratelimit_remaining=59,
+    x_ratelimit_used=1,
+    x_ratelimit_reset=58
+)
+
+The OpenAQ Python SDK automatically tracks these headers internally. If the rate limit has been exceeded the client will throw a RateLimitError exception. Once the rate limit reset period has passed the client will send requests up to allotted rate limit amount and period.
+
+Integrating with Pandas
+
+The OpenAQ Python SDK is designed around native Python data structures and in turn does not return data as vectorized arrays such as data frames used by packages like Numpy, Pandas and others. Because native Python data structures are used integrating these types of libraries is straightforward.
+
+Because the data returned from the OpenAQ API is highly nested as a deserialized Python object we need to flatten the resulting response so that it fits as a 2-dimensional array in Pandas. Fortunately, Pandas provides a function to facilitate this, json_normalize:
+Sync
+Async
+
+from openaq import OpenAQ
+from pandas import json_normalize
+
+client = OpenAQ(api_key='replace-with-a-valid-openaq-api-key')
+response = client.locations.list(
+    
+bbox=[-0.464172,5.449908,0.030212,5.691491]
+)
+data = response.dict()
+df = json_normalize(data['results'])
+client.close()
+
+
+
+
