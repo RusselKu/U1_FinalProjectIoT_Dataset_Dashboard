@@ -1,80 +1,97 @@
-# Guía de Apoyo para el Flujo de Datos
+# Flujo de Datos y Lógica de Implementación
 
-## 1. Introducción
-
-Esta guía está dirigida a los desarrolladores encargados de implementar la lógica de publicación de datos (sensores) y la visualización en el dashboard.
-
-La infraestructura backend está completamente configurada y en funcionamiento. Todos los servicios (broker, base de datos, suscriptor) se inician y comunican automáticamente. Lo único que se necesita para levantar todo el entorno es ejecutar el siguiente comando en la raíz del proyecto:
-
-```bash
-docker-compose up
-```
+Este documento detalla la lógica interna de los scripts que componen el pipeline de datos y el dashboard de visualización, desde cómo se obtienen los datos hasta cómo se presentan.
 
 ---
 
-## 2. Guía para el Desarrollador del Publicador (MQTT)
+## 1. Flujo de Ingesta de Datos (Backend)
 
-Tu tarea es crear un script que simule uno o varios sensores y publique los datos en el broker MQTT.
+- **Objetivo**: Poblar la base de datos PostgreSQL con datos de calidad del aire desde la API de OpenAQ de forma automatizada y robusta.
+- **Script Principal**: `run_publisher.py`
+- **Ubicación**: Se ejecuta dentro del contenedor Docker `ingestion`.
 
-### Detalles de Conexión al Broker
-El broker `mosquitto` está expuesto a tu máquina local. Para conectarte a él desde tu script de Python (ejecutado en tu propia máquina, fuera de Docker), usa los siguientes parámetros:
+### Lógica Detallada del Script de Ingesta
 
-- **Host:** `'localhost'` o `'127.0.0.1'`
-- **Puerto:** `1883`
-- **Usuario/Contraseña:** No se requieren. La conexión es anónima.
+El script sigue un proceso ETL (Extracción, Transformación y Carga) bien definido:
 
-### Formato del Mensaje
-El servicio suscriptor espera que cada mensaje sea un objeto JSON con una clave específica "value".
+#### **Paso 1: Configuración y Conexión**
+1.  **Carga de Secretos**: Se utiliza la librería `dotenv` para cargar de forma segura la `OPENAQ_API_KEY` y las credenciales de la base de datos desde un archivo `.env`.
+2.  **Conexión a la BD**: Se establece una conexión con la base de datos PostgreSQL usando `psycopg2`. La función de conexión incluye reintentos para manejar casos donde el contenedor de la BD tarde un poco en arrancar.
 
-- **Formato Requerido:** `{"value": <numero>}`
-  - Ejemplo con entero: `{"value": 42}`
-  - Ejemplo con flotante: `{"value": 3.14159}`
+#### **Paso 2: Extracción (E)**
+1.  **Instancia del Cliente**: Se crea una instancia del cliente de la API de OpenAQ: `openaq.OpenAQ(api_key=...)`.
+2.  **Iteración de Sensores**: El script itera sobre un diccionario predefinido (`SENSOR_PARAMETER_MAPPING`) que mapea los IDs de los sensores de la estación a los IDs de los parámetros en nuestra base de datos.
+3.  **Determinación del Rango de Fechas**: Para cada sensor, el script es inteligente:
+    - Primero, consulta la tabla `fact_measurements` para encontrar el `timestamp` más reciente que ya ha sido guardado.
+    - Si encuentra un `timestamp`, la consulta a la API pedirá datos a partir de ese momento (`latest_ts + 1 segundo`), evitando descargar datos duplicados.
+    - Si no hay datos para ese sensor, por defecto solicita los datos de los últimos 7 días.
+4.  **Llamada a la API**: Se realiza la llamada usando `api.measurements.list()`. Durante el desarrollo, se corrigieron varios errores clave en los parámetros de esta llamada:
+    - Se usa `sensors_id` (no `sensor`).
+    - Se usa `datetime_from` (no `date_from`).
+    - El `limit` se ajustó a `1000` (el máximo permitido por la librería).
 
-### Tópicos (Topics)
-El suscriptor está escuchando en todos los tópicos (`#`). La inserción en la base de datos se realiza de la siguiente manera:
+#### **Paso 3: Transformación (T)**
+1.  **Manejo de la Respuesta**: La respuesta de la librería (`resp.results`) es una lista de objetos `Measurement`.
+2.  **Acceso a Datos**: Se itera sobre esta lista y se extraen los datos relevantes. Se descubrió que la ruta correcta para el timestamp era `r.period.datetime_from.utc`.
+3.  **Estructuración en DataFrame**: Los datos extraídos se cargan en un DataFrame de `pandas`, que es una estructura ideal para la manipulación de datos tabulares. Se añaden las columnas faltantes (`station_id`, `parameter_id`) para que coincida con el esquema de la tabla de destino.
 
-- Si el `value` en el mensaje es un **entero**, los datos se guardarán en la tabla `lake_raw_data_int`.
-- Si el `value` es un **flotante**, los datos se guardarán en la tabla `lake_raw_data_float`.
-
-Puedes usar diferentes tópicos para organizar tus datos (ej. `sensor/temperatura`, `sensor/humedad`), y mientras el formato del mensaje sea correcto, el suscriptor lo procesará y lo guardará en la tabla correspondiente según el tipo de dato.
+#### **Paso 4: Carga (L)**
+1.  **Inserción Masiva**: En lugar de insertar fila por fila (lo cual es muy ineficiente), se utiliza la función `psycopg2.extras.execute_values`. Esta convierte el DataFrame en una lista de tuplas y las inserta todas en una sola transacción a la base de datos.
+2.  **Manejo de Conflictos**: La consulta de `INSERT` incluye la cláusula `ON CONFLICT (station_id, parameter_id, timestamp_utc) DO NOTHING`. Esto es crucial para la robustez del sistema, ya que si el script se ejecuta varias veces con los mismos datos, simplemente ignora los registros duplicados en lugar de fallar.
 
 ---
 
-## 3. Guía para el Desarrollador del Dashboard (Streamlit)
+## 2. Flujo de Visualización de Datos (Frontend)
 
-Tu tarea es implementar la lógica de visualización en el dashboard de Streamlit, consumiendo los datos que ya están siendo almacenados en la base de datos PostgreSQL.
+- **Objetivo**: Presentar los datos almacenados en PostgreSQL de una forma interactiva, clara y estéticamente agradable.
+- **Framework**: Streamlit
+- **Ubicación**: Se ejecuta dentro del contenedor Docker `streamlit_app`.
 
-### Conexión a la Base de Datos
-**No necesitas configurar la conexión.** El servicio `streamlit` ya recibe todas las credenciales necesarias a través de variables de entorno desde `docker-compose.yml`.
+### Lógica Detallada del Dashboard
 
-Tu código dentro de `streamlit_app/app.py` puede (y debe) leer estas variables de entorno para establecer la conexión. El script `subscriber.py` contiene un buen ejemplo de cómo hacer esto:
+#### **Módulo de Acceso a Datos (`utils/db_connection.py`)**
 
-```python
-import os
-import psycopg2
+Este módulo centraliza toda la lógica de consultas a la base de datos.
 
-# Ejemplo de cómo leer las variables de entorno para la conexión
-conn = psycopg2.connect(
-    host=os.environ.get("DB_HOST"),
-    database=os.environ.get("DB_NAME"),
-    user=os.environ.get("DB_USER"),
-    password=os.environ.get("DB_PASS"),
-    port=os.environ.get("DB_PORT")
-)
-```
+1.  **Conexión Cacheada**: La función `get_db_connection()` está decorada con `@st.cache_resource`. Esto es una optimización clave de Streamlit que asegura que la conexión a la base de datos se establezca **una sola vez** y se reutilice en todas las interacciones del usuario, en lugar de abrir y cerrar conexiones constantemente.
+2.  **Funciones de Consulta Cacheadas**: Las funciones que leen datos (ej. `get_measurements_data`) usan `@st.cache_data(ttl=...)`. Esto significa que si un usuario no cambia los filtros, Streamlit no volverá a ejecutar la consulta a la base de datos, sino que servirá los resultados desde la memoria cache, haciendo la aplicación mucho más rápida.
+3.  **Consultas con `JOIN`**: Las consultas están diseñadas para el modelo dimensional. Por ejemplo, `get_measurements_data` une `fact_measurements` con `dim_parameters` para obtener el nombre y las unidades del contaminante junto con sus valores.
 
-### Esquema de las Tablas
-Tienes dos tablas a tu disposición para consultar los datos:
+#### **Aplicación Principal (`app.py`)**
 
-1.  **`lake_raw_data_int`**: Contiene los valores enteros.
-2.  **`lake_raw_data_float`**: Contiene los valores flotantes.
+1.  **Carga Inicial**: Al iniciar la app, se obtienen los parámetros disponibles (`get_available_parameters`) para construir dinámicamente el menú de filtros.
+2.  **Interfaz de Usuario y Filtros**:
+    - Se utiliza `st.sidebar` para agrupar todos los controles (selector de parámetro y rango de fechas).
+    - El selector de parámetros se crea a partir de los datos reales de la base de datos, asegurando que solo se puedan seleccionar contaminantes para los que existen datos.
+3.  **Flujo Reactivo**:
+    - El usuario interactúa con los filtros de la barra lateral.
+    - Al presionar el botón "Aplicar Filtros", Streamlit re-ejecuta el script.
+    - Las funciones de `db_connection.py` son llamadas con los nuevos valores de los filtros.
+    - Como las funciones están cacheadas, solo se ejecutarán nuevas consultas a la BD si los filtros han cambiado.
+4.  **Renderizado de Componentes**:
+    - **KPIs**: Las tarjetas de métricas (`st.metric`) se rellenan con los datos de la función `get_summary_stats`.
+    - **Gráfica Principal**: Los datos de `get_measurements_data` se pasan a una figura de `Plotly`, que ofrece una visualización interactiva (zoom, paneo, etc.) y un "rangeslider" para una navegación de fechas más cómoda.
+    - **Mapa y Tabla**: Los datos de la estación y las mediciones se utilizan para renderizar el mapa (`st.map`) y la tabla de datos crudos (`st.dataframe`) en sus respectivas pestañas.
 
-Ambas tablas tienen las siguientes columnas que puedes usar en tus queries (`SELECT`):
-- `id`: Identificador único de la fila.
-- `topic`: El tópico MQTT en el que se publicó el mensaje.
-- `payload`: El mensaje JSON completo que se recibió.
-- `value`: El valor numérico extraído del payload.
-- `ts`: La fecha y hora en que se insertó el registro en la base de datos.
+---
 
-### Punto de Partida
-Ya existe un archivo `streamlit_app/app.py` con contenido básico. Este archivo fue creado para asegurar que el servicio se levante correctamente. **Debes borrar su contenido y reemplazarlo con tu propia lógica** para consultar los datos de PostgreSQL y generar las gráficas.
+## 3. Modelo de Datos (Esquema de la BD)
+
+- **Archivo de Definición**: `init.sql`
+- **Modelo**: Dimensional, compuesto por tablas de hechos y tablas de dimensión.
+
+- **`dim_stations` (Tabla de Dimensión)**
+    - **Propósito**: Almacena atributos de las estaciones de monitoreo.
+    - **Campos Clave**: `id` (PK), `name`, `city`, `latitude`, `longitude`.
+    - **Ventaja**: Evita repetir la información de la estación en cada registro de medición.
+
+- **`dim_parameters` (Tabla de Dimensión)**
+    - **Propósito**: Describe los parámetros o contaminantes medidos.
+    - **Campos Clave**: `id` (PK), `name` (ej. "pm25"), `display_name` (ej. "PM2.5"), `units` (ej. "µg/m³").
+    - **Ventaja**: Centraliza la información de los contaminantes.
+
+- **`fact_measurements` (Tabla de Hechos)**
+    - **Propósito**: Es la tabla principal que almacena cada medición individual.
+    - **Campos Clave**: `id` (PK), `station_id` (FK a `dim_stations`), `parameter_id` (FK a `dim_parameters`), `value`, `timestamp_utc`.
+    - **Ventaja**: Este diseño es muy eficiente para realizar consultas analíticas (ej. "dame el promedio de PM2.5 para la estación X en el último mes").
+    - **Índices**: La clave primaria compuesta `(station_id, parameter_id, timestamp_utc)` no solo garantiza la unicidad, sino que también actúa como un índice que acelera enormemente las consultas filtradas por estos campos.

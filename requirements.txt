@@ -17,3 +17,6 @@ sqlalchemy
 python-dotenv
 python-dateutil
 requests
+
+# OpenAQ Official Library
+openaq

@@ -1,0 +1,24 @@
+/*
+  Estilo Minimalista para Tema Oscuro
+  -----------------------------------
+  Diseño basado en la sugerencia del usuario: sin fondo en las tarjetas,
+  texto blanco y solo un borde para delimitar.
+*/
+
+div[data-testid="stMetric"] {
+    background-color: transparent !important; /* Hacemos el fondo de la tarjeta transparente */
+    border: 1px solid #4A5568; /* Un borde sutil de color gris-azulado */
+    padding: 15px;
+    border-radius: 8px;
+}
+
+div[data-testid="stMetricLabel"] {
+    color: #A0AEC0 !important; /* Texto de la etiqueta en un gris claro */
+    font-size: 0.9em !important;
+}
+
+div[data-testid="stMetricValue"] {
+    color: #FFFFFF !important; /* Texto del valor principal en blanco puro */
+    font-size: 2em !important;
+    font-weight: bold;
+}
