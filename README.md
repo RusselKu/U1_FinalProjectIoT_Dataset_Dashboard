@@ -45,6 +45,12 @@ El proyecto sigue una arquitectura de pipeline de datos moderna y desacoplada.
     - **Vista General**: KPIs, serie temporal, mapa de la estación y tabla de datos crudos.
     - **Análisis Avanzado**: 4 gráficas adicionales (Gauge, Barras, Heatmap, Box Plot) para descubrir patrones.
     - **Explorador SQL**: Una consola para ejecutar consultas `SELECT` personalizadas directamente sobre la base de datos.
+    - **ETL Monitor**: Vista tipo panel operativo con ejecuciones, eventos y estado del pipeline sin usar Airflow.
+
+### 5. **ETL Regional**
+- **Modo por defecto**: `regional`
+- **Cobertura**: descubre estaciones por geografía para Guanajuato, Estado de México, CDMX, Querétaro e Hidalgo.
+- **Respaldo**: `legacy` conserva el flujo original de India si necesitas comparar resultados o depurar.
 
 ---
 
@@ -104,6 +110,10 @@ DB_PORT=5432
 DB_NAME=sensordata
 DB_USER=user
 DB_PASSWORD=password
+
+# Control de extracción
+EXTRACTION_MODE=regional
+OPENAQ_LOOKBACK_DAYS=7
 ```
 
 ## 🐳 Comandos Docker Principales

@@ -36,6 +36,34 @@ CREATE TABLE IF NOT EXISTS fact_measurements (
 -- Índice para acelerar los gráficos de series de tiempo del Dashboard
 CREATE INDEX IF NOT EXISTS idx_measurements_time ON fact_measurements (timestamp_utc DESC);
 
+-- 4. Tablas de monitoreo ETL
+CREATE TABLE IF NOT EXISTS etl_runs (
+    id BIGSERIAL PRIMARY KEY,
+    pipeline_name VARCHAR(100) NOT NULL,
+    extraction_mode VARCHAR(50) NOT NULL,
+    status VARCHAR(30) NOT NULL DEFAULT 'running',
+    started_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    finished_at TIMESTAMPTZ,
+    discovered_locations INTEGER NOT NULL DEFAULT 0,
+    inserted_rows INTEGER NOT NULL DEFAULT 0,
+    error_message TEXT,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb
+);
+
+CREATE INDEX IF NOT EXISTS idx_etl_runs_started_at ON etl_runs (started_at DESC);
+
+CREATE TABLE IF NOT EXISTS etl_run_events (
+    id BIGSERIAL PRIMARY KEY,
+    run_id BIGINT NOT NULL REFERENCES etl_runs(id) ON DELETE CASCADE,
+    event_type VARCHAR(50) NOT NULL,
+    status VARCHAR(30) NOT NULL,
+    message TEXT NOT NULL,
+    payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_etl_run_events_run_id_created_at ON etl_run_events (run_id, created_at DESC);
+
 -- --- PRE-POBLACIÓN DE DATOS DIMENSIONALES ---
 
 -- Insertar los parámetros que vamos a utilizar de la estación R K Puram, Delhi - DPCC

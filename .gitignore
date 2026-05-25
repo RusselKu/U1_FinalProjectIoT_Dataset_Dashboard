@@ -18,7 +18,8 @@ __pycache__/
 # VSCode / IDEs
 .vscode/
 .idea/
-
+.venv/
+dags/
 # Docker
 *.pid
 *.sock
