@@ -7,11 +7,17 @@ import os
 
 # Importar las nuevas funciones de conexión
 from utils.db_connection import (
-    get_station_info,
+    get_available_states,
+    get_stations,
     get_available_parameters,
+    get_measurement_date_bounds,
     get_summary_stats,
     get_enriched_measurements,
     query_data, # Importamos la función genérica de consulta
+    get_recent_etl_runs,
+    get_latest_etl_run,
+    get_etl_run_events,
+    get_etl_summary,
 )
 
 # --- Configuración de la Página ---
@@ -33,13 +39,52 @@ load_css("styles/main.css")
 st.markdown('<h1 style="text-align: center; color: #1E88E5;">Dashboard de Calidad del Aire</h1>', unsafe_allow_html=True)
 
 # --- Carga de Datos Inicial ---
-station_info = get_station_info()
 available_params = get_available_parameters()
+available_states_df = get_available_states()
+date_bounds = get_measurement_date_bounds()
+
+if date_bounds is not None and pd.notna(date_bounds.get("max_timestamp")):
+    max_timestamp = pd.to_datetime(date_bounds["max_timestamp"]).to_pydatetime()
+    min_timestamp = pd.to_datetime(date_bounds["min_timestamp"]).to_pydatetime() if pd.notna(date_bounds.get("min_timestamp")) else max_timestamp
+    default_end_date = max_timestamp.date()
+    default_start_candidate = (max_timestamp - timedelta(days=7)).date()
+    default_start_date = max(min_timestamp.date(), default_start_candidate)
+else:
+    default_start_date = date.today() - timedelta(days=7)
+    default_end_date = date.today()
 
 # --- Barra Lateral de Filtros ---
 with st.sidebar:
     st.header("⚙️ Filtros del Dashboard")
     st.markdown("---")
+
+    filter_mode = st.radio("Filtro geográfico", ["Estado", "Estación"], horizontal=True)
+
+    states = ["Todos"]
+    if not available_states_df.empty:
+        states += available_states_df["state_name"].tolist()
+
+    selected_state = st.selectbox("Estado", options=states, index=0)
+    state_filter = None if selected_state == "Todos" else selected_state
+
+    stations_df = get_stations(state_filter)
+    if stations_df.empty:
+        st.warning("No hay estaciones para el filtro seleccionado.")
+        st.stop()
+
+    if filter_mode == "Estación":
+        selected_station = st.selectbox(
+            "Selecciona una estación",
+            options=stations_df.to_dict("records"),
+            format_func=lambda s: f"{s['name']} ({s['city']})",
+        )
+        selected_station_ids = [int(selected_station["id"])]
+        selected_stations_map = stations_df[stations_df["id"] == selected_station["id"]]
+    else:
+        selected_station_ids = stations_df["id"].astype(int).tolist()
+        selected_stations_map = stations_df.copy()
+
+    st.caption(f"Estaciones seleccionadas: {len(selected_station_ids)}")
 
     if not available_params.empty:
         selected_param = st.selectbox(
@@ -57,29 +102,31 @@ with st.sidebar:
     st.markdown("**Rango de Fechas**")
     col1, col2 = st.columns(2)
     with col1:
-        start_date = st.date_input("Desde", date.today() - timedelta(days=7))
+        start_date = st.date_input("Desde", default_start_date)
     with col2:
-        end_date = st.date_input("Hasta", date.today())
+        end_date = st.date_input("Hasta", default_end_date)
 
     start_datetime = datetime.combine(start_date, datetime.min.time())
     end_datetime = datetime.combine(end_date, datetime.max.time())
 
     st.markdown("---")
-    if st.button("🔄 Aplicar Filtros y Refrescar", use_container_width=True, type="primary"):
+    if st.button("🔄 Aplicar Filtros y Refrescar", width="stretch", type="primary"):
         st.cache_data.clear()
         st.rerun()
 
     st.markdown("---")
     st.subheader("📍 Estación Monitoreada")
-    if station_info is not None:
-        st.info(f"**Nombre:** {station_info['name']}\n\n**Ciudad:** {station_info['city']}\n\n**País:** {station_info['country_code']}")
+    if filter_mode == "Estación":
+        st.info(f"**Nombre:** {selected_station['name']}\n\n**Ciudad/Estado:** {selected_station['city']}\n\n**País:** {selected_station['country_code']}")
+    else:
+        st.info(f"**Estado:** {selected_state}\n\n**Total Estaciones:** {len(selected_station_ids)}")
 
 # --- Carga de Datos Principal ---
-stats = get_summary_stats(selected_param_id, start_datetime, end_datetime)
-enriched_df = get_enriched_measurements(selected_param_id, start_datetime, end_datetime)
+stats = get_summary_stats(selected_param_id, start_datetime, end_datetime, selected_station_ids)
+enriched_df = get_enriched_measurements(selected_param_id, start_datetime, end_datetime, selected_station_ids)
 
 # --- Pestañas Principales ---
-tab_main, tab_advanced, tab_sql, tab_info = st.tabs(["📈 Vista General", "🔬 Análisis Avanzado", "🔍 Explorador SQL", "ℹ️ Info del Proyecto"])
+tab_main, tab_advanced, tab_sql, tab_etl, tab_info = st.tabs(["📈 Vista General", "🔬 Análisis Avanzado", "🔍 Explorador SQL", "🛠️ ETL Monitor", "ℹ️ Info del Proyecto"])
 
 # ======================= PESTAÑA 1: VISTA GENERAL =======================
 with tab_main:
@@ -99,18 +146,22 @@ with tab_main:
         fig_line = go.Figure()
         fig_line.add_trace(go.Scatter(x=enriched_df['timestamp_utc'], y=enriched_df['value'], mode='lines', name=selected_param_name, line=dict(color='#1E88E5', width=3)))
         fig_line.update_layout(xaxis_title="Fecha y Hora (UTC)", yaxis_title=f"Valor ({selected_param_units})", hovermode='x unified', height=500, xaxis_rangeslider_visible=True, margin=dict(l=40, r=40, t=40, b=40))
-        st.plotly_chart(fig_line, use_container_width=True)
+        st.plotly_chart(fig_line, width="stretch")
         st.markdown("---")
         
         tab_map, tab_raw_data = st.tabs(["🗺️ Mapa de la Estación", "📋 Datos Crudos"])
         with tab_map:
-            st.subheader(f"Ubicación de la Estación: {station_info['name']}")
-            if station_info is not None and 'latitude' in station_info and 'longitude' in station_info:
-                map_data = pd.DataFrame({'lat': [station_info['latitude']], 'lon': [station_info['longitude']]})
-                st.map(map_data, zoom=12)
+            title_suffix = selected_station['name'] if filter_mode == "Estación" else selected_state
+            st.subheader(f"Ubicación geográfica: {title_suffix}")
+            map_source = selected_stations_map.dropna(subset=["latitude", "longitude"])
+            if not map_source.empty:
+                map_data = pd.DataFrame({"lat": map_source["latitude"], "lon": map_source["longitude"]})
+                st.map(map_data, zoom=7 if filter_mode == "Estado" else 12)
+            else:
+                st.info("No hay coordenadas disponibles para la selección actual.")
         with tab_raw_data:
             st.subheader("Explorador de Datos Crudos")
-            st.dataframe(enriched_df[['timestamp_utc', 'value']].sort_values(by='timestamp_utc', ascending=False), use_container_width=True)
+            st.dataframe(enriched_df[['timestamp_utc', 'value']].sort_values(by='timestamp_utc', ascending=False), width="stretch")
 
 # ======================= PESTAÑA 2: ANÁLISIS AVANZADO =======================
 with tab_advanced:
@@ -124,7 +175,7 @@ with tab_advanced:
             latest_val = stats['latest_value']
             fig_gauge = go.Figure(go.Indicator(mode="gauge+number", value=latest_val, title={'text': f"Último Valor ({selected_param_units})"}, gauge={'axis': {'range': [None, max(latest_val * 2, 50)]}, 'bar': {'color': "#1a1a1a"}, 'steps': [{'range': [0, 50], 'color': "lightgreen"}, {'range': [50, 100], 'color': "yellow"}, {'range': [100, 150], 'color': "orange"}, {'range': [150, 200], 'color': "red"}, {'range': [200, 300], 'color': "purple"}]}))
             fig_gauge.update_layout(height=350, margin=dict(l=30, r=30, t=50, b=30))
-            st.plotly_chart(fig_gauge, use_container_width=True)
+            st.plotly_chart(fig_gauge, width="stretch")
         with col2:
             st.subheader("Promedio por Día de la Semana")
             day_map = {1: 'Lunes', 2: 'Martes', 3: 'Miércoles', 4: 'Jueves', 5: 'Viernes', 6: 'Sábado', 7: 'Domingo'}
@@ -134,7 +185,7 @@ with tab_advanced:
             fig_bar = px.bar(daily_avg, x='day_name', y='value', text_auto='.2s', title="Promedio del Contaminante por Día")
             fig_bar.update_traces(textfont_size=12, textangle=0, textposition="outside", cliponaxis=False)
             fig_bar.update_layout(height=350, xaxis_title="Día de la Semana", yaxis_title=f"Valor Promedio ({selected_param_units})", margin=dict(l=30, r=30, t=50, b=30))
-            st.plotly_chart(fig_bar, use_container_width=True)
+            st.plotly_chart(fig_bar, width="stretch")
         st.markdown("---")
         col3, col4 = st.columns(2)
         with col3:
@@ -143,14 +194,14 @@ with tab_advanced:
             heatmap_data.index = heatmap_data.index.map(day_map)
             fig_heatmap = px.imshow(heatmap_data, labels=dict(x="Hora del Día", y="Día de la Semana", color=f"Promedio ({selected_param_units})"), x=heatmap_data.columns, y=heatmap_data.index, title="Mapa de Calor de Actividad")
             fig_heatmap.update_layout(height=350, margin=dict(l=30, r=30, t=50, b=30))
-            st.plotly_chart(fig_heatmap, use_container_width=True)
+            st.plotly_chart(fig_heatmap, width="stretch")
         with col4:
             st.subheader("Distribución de Valores por Día")
             df_box = enriched_df.copy()
             df_box['day_name'] = df_box['day_of_week'].map(day_map)
             fig_box = px.box(df_box, x='day_name', y='value', title="Distribución Diaria (Mediana, Rangos, Atípicos)")
             fig_box.update_layout(height=350, xaxis_title="Día de la Semana", yaxis_title=f"Valor ({selected_param_units})", margin=dict(l=30, r=30, t=50, b=30))
-            st.plotly_chart(fig_box, use_container_width=True)
+            st.plotly_chart(fig_box, width="stretch")
 
 # ======================= PESTAÑA 3: EXPLORADOR SQL =======================
 with tab_sql:
@@ -192,12 +243,121 @@ with tab_sql:
 
                         # Opción 2: Mostrar siempre la tabla de datos
                         st.write("Datos en Tabla:")
-                        st.dataframe(query_result_df, use_container_width=True)
+                        st.dataframe(query_result_df, width="stretch")
                     
                 except Exception as e:
                     st.error(f"❌ Error al ejecutar la consulta: {e}")
         else:
             st.warning("Por favor, escribe una consulta antes de ejecutar.")
+
+# ======================= PESTAÑA 4: MONITOR ETL =======================
+with tab_etl:
+    st.markdown(
+        """
+        <style>
+        .etl-wrap { background: linear-gradient(180deg, #0f172a 0%, #111827 100%); color: #e5e7eb; padding: 24px; border-radius: 24px; border: 1px solid rgba(148, 163, 184, 0.18); }
+        .etl-title { font-size: 2rem; font-weight: 800; margin-bottom: 4px; }
+        .etl-sub { color: #94a3b8; margin-bottom: 18px; }
+        .etl-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 18px; }
+        .etl-card { background: rgba(15, 23, 42, 0.72); border: 1px solid rgba(148, 163, 184, 0.18); border-radius: 18px; padding: 16px; box-shadow: 0 10px 30px rgba(2, 6, 23, 0.18); }
+        .etl-label { font-size: 0.78rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; }
+        .etl-value { font-size: 1.6rem; font-weight: 800; margin-top: 6px; }
+        .etl-pill { display:inline-block; padding: 5px 10px; border-radius: 999px; font-size: 0.8rem; margin-right: 8px; }
+        .success { background:#064e3b; color:#d1fae5; }
+        .running { background:#1e3a8a; color:#dbeafe; }
+        .error { background:#7f1d1d; color:#fee2e2; }
+        .etl-lane { display:grid; grid-template-columns: 1.1fr 1.9fr; gap: 16px; }
+        .etl-box { background: rgba(15, 23, 42, 0.72); border: 1px solid rgba(148, 163, 184, 0.18); border-radius: 18px; padding: 16px; }
+        .etl-event { border-left: 3px solid #38bdf8; padding: 12px 14px; margin-bottom: 10px; background: rgba(30, 41, 59, 0.75); border-radius: 12px; }
+        .etl-event.error { border-left-color: #ef4444; }
+        .etl-event.success { border-left-color: #22c55e; }
+        .etl-event h4 { margin: 0 0 4px 0; font-size: 1rem; }
+        .etl-event p { margin: 0; color: #cbd5e1; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    summary = get_etl_summary()
+    recent_runs = get_recent_etl_runs()
+    latest_run = get_latest_etl_run()
+
+    st.markdown('<div class="etl-wrap">', unsafe_allow_html=True)
+    st.markdown('<div class="etl-title">ETL Monitor</div>', unsafe_allow_html=True)
+    st.markdown('<div class="etl-sub">Seguimiento de ejecuciones, estados y eventos del pipeline sin depender de Airflow.</div>', unsafe_allow_html=True)
+
+    if summary is not None:
+        total_runs = int(summary.get("total_runs", 0) or 0)
+        success_runs = int(summary.get("success_runs", 0) or 0)
+        error_runs = int(summary.get("error_runs", 0) or 0)
+        success_rate = (success_runs / total_runs * 100) if total_runs else 0
+        total_inserted_rows = int(summary.get("total_inserted_rows", 0) or 0)
+        total_discovered_locations = int(summary.get("total_discovered_locations", 0) or 0)
+
+        st.markdown(
+            f"""
+            <div class="etl-grid">
+                <div class="etl-card"><div class="etl-label">Ejecuciones totales</div><div class="etl-value">{total_runs}</div></div>
+                <div class="etl-card"><div class="etl-label">Tasa de éxito</div><div class="etl-value">{success_rate:.1f}%</div></div>
+                <div class="etl-card"><div class="etl-label">Filas insertadas</div><div class="etl-value">{total_inserted_rows}</div></div>
+                <div class="etl-card"><div class="etl-label">Ubicaciones descubiertas</div><div class="etl-value">{total_discovered_locations}</div></div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    st.markdown('<div class="etl-lane">', unsafe_allow_html=True)
+    st.markdown('<div class="etl-box">', unsafe_allow_html=True)
+    st.subheader("Última ejecución")
+    if latest_run is None:
+        st.info("Todavía no hay ejecuciones registradas.")
+    else:
+        status = str(latest_run["status"]).lower()
+        status_class = "success" if status == "success" else "error" if status == "error" else "running"
+        st.markdown(
+            f"""
+            <span class="etl-pill {status_class}">{status.upper()}</span>
+            <span class="etl-pill running">{latest_run['extraction_mode']}</span>
+            <span class="etl-pill">Run #{int(latest_run['id'])}</span>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.write(f"Inicio: {latest_run['started_at']}")
+        if latest_run.get("finished_at") is not None:
+            st.write(f"Fin: {latest_run['finished_at']}")
+        st.write(f"Ubicaciones: {int(latest_run['discovered_locations'] or 0)}")
+        st.write(f"Filas insertadas: {int(latest_run['inserted_rows'] or 0)}")
+        if latest_run.get("error_message"):
+            st.error(latest_run["error_message"])
+        run_events = get_etl_run_events(int(latest_run["id"]))
+        if not run_events.empty:
+            st.markdown("**Eventos recientes**")
+            for _, event in run_events.tail(12).iterrows():
+                event_status = str(event["status"]).lower()
+                event_class = "success" if event_status == "success" else "error" if event_status == "error" else "running"
+                st.markdown(
+                    f"""
+                    <div class="etl-event {event_class}">
+                        <h4>{event['event_type']} · {event['status']}</h4>
+                        <p>{event['message']}</p>
+                        <p style="font-size: 0.78rem; color: #94a3b8;">{event['created_at']}</p>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown('<div class="etl-box">', unsafe_allow_html=True)
+    st.subheader("Historial reciente")
+    if recent_runs.empty:
+        st.info("Sin historial todavía.")
+    else:
+        view_df = recent_runs.copy()
+        view_df["status"] = view_df["status"].str.upper()
+        st.dataframe(view_df, width="stretch", hide_index=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # ======================= PESTAÑA 4: INFORMACIÓN =======================
 with tab_info:

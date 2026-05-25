@@ -1,337 +1,195 @@
-# 🚀 IoT MQTT Data Ingestion and Visualization (Mosquitto Local)
+# 🚀 OpenAQ Data Pipeline and Visualization Dashboard
 
-Un sistema completo de ingesta, almacenamiento y visualización de datos IoT utilizando Mosquitto (MQTT local), PostgreSQL y Streamlit.
+Un sistema completo de ingesta de datos, almacenamiento y visualización que consume datos reales de la API de OpenAQ, los procesa y los presenta en un dashboard interactivo de Streamlit.
 
-**Perfectamente diseñado para proyectos escolares y desarrollo local.**
+**Diseñado como un proyecto final robusto que demuestra un pipeline de datos de punta a punta.**
 
 ## 📋 Arquitectura del Sistema
 
+El proyecto sigue una arquitectura de pipeline de datos moderna y desacoplada.
+
 ```
-┌─────────────────────┐
-│  Publisher          │
-│  (Genera datos)     │
-└──────────┬──────────┘
-           │
-           ▼
-    ┌──────────────┐
-    │  MQTT Topics │
-    ├──────────────┤
-    │lake/raw/int  │
-    │lake/raw/float│
-    └──────┬───────┘
-           │
-    ┌──────▼──────────┐
-    │ Mosquitto       │
-    │ (Broker MQTT)   │
-    │ Port 1883       │
-    └──────┬──────────┘
-           │
-    ┌──────▼───────────┐
-    │ Subscriber       │
-    │ (Docker Service) │
-    └──────┬───────────┘
-           │
-    ┌──────▼────────────────┐
-    │   PostgreSQL           │
-    ├────────────────────────┤
-    │ • lake_raw_data_int    │
-    │ • lake_raw_data_float  │
-    │ • events_log           │
-    └──────┬─────────────────┘
-           │
-    ┌──────▼──────────────┐
-    │  Streamlit Dashboard │
-    │  http://localhost   │
-    │        :8501        │
-    └─────────────────────┘
+┌────────────────┐      ┌─────────────────────────────┐      ┌─────────────────────┐      ┌────────────────────────────┐      ┌───────────────┐
+│                │      │   Servicio de Ingesta (ETL) │      │                     │      │  Servicio de Visualización │      │               │
+│  OpenAQ API    ├─────►│     (Python / Docker)       ├─────►│   PostgreSQL        ├─────►│    (Streamlit / Docker)    ├─────►│ Usuario Final │
+│ (Fuente Externa) │      │                             │      │   (Docker)          │      │                            │      │ (Navegador Web) │
+│                │      │                             │      │                     │      │                            │      │               │
+└────────────────┘      └─────────────────────────────┘      └─────────────────────┘      └────────────────────────────┘      └───────────────┘
 ```
 
 ## 🎯 Componentes Principales
 
-### 1. **Mosquitto MQTT Broker**
-- Broker MQTT local en Docker
-- Puerto 1883 (MQTT) y 9001 (WebSocket)
-- Sin autenticación (desarrollo)
-- Configuración en `mosquitto/mosquitto.conf`
+### 1. **Fuente de Datos: OpenAQ API**
+- **Descripción**: API pública que provee datos de monitoreo de calidad del aire de estaciones a nivel mundial.
+- **Función**: Actúa como la fuente de datos crudos para nuestro pipeline.
+- **Seguridad**: El acceso requiere una API Key, gestionada de forma segura a través de un archivo `.env`.
 
-### 2. **PostgreSQL Database**
-- Base de datos relacional
-- Tablas para datos enteros y flotantes
-- Inicialización automática con `init.sql`
-- Puerto 5432
+### 2. **Servicio de Ingesta (ETL)**
+- **Contenedor**: `ingestion`
+- **Descripción**: Un script de Python (`run_publisher.py`) que se ejecuta en un bucle dentro de un contenedor Docker. Es el corazón del pipeline y realiza el proceso de **Extracción, Transformación y Carga (ETL)**.
+- **Funcionamiento**: Se conecta a la API de OpenAQ, extrae los datos, los transforma a un formato adecuado y los carga en la base de datos PostgreSQL.
 
-### 3. **Publisher** (`Project_Elements/publisher.ipynb`)
-- Publica datos aleatorios en MQTT
-- Tópicos:
-  - `lake/raw/int` → valores enteros
-  - `lake/raw/float` → valores flotantes
-- Se ejecuta en Jupyter Notebook
+### 3. **Base de Datos PostgreSQL**
+- **Contenedor**: `postgres_db`
+- **Descripción**: Base de datos relacional que almacena los datos de calidad del aire en un **modelo dimensional** (esquema de estrella), lo que optimiza las consultas analíticas.
+- **Esquema**:
+    - `dim_stations`: Almacena metadatos de las estaciones.
+    - `dim_parameters`: Almacena metadatos de los contaminantes.
+    - `fact_measurements`: Almacena cada medición individual.
+- **Inicialización**: El esquema se crea automáticamente al iniciar el contenedor gracias al script `init.sql`.
 
-### 4. **Subscriber** (Docker Service)
-- Escucha mensajes MQTT desde Mosquitto
-- Almacena datos en PostgreSQL automáticamente
-- Se ejecuta como contenedor Docker
-- Código en `subscriber/subscriber.py`
+### 4. **Dashboard de Streamlit**
+- **Contenedor**: `streamlit_app`
+- **Descripción**: Una aplicación web interactiva para la visualización y análisis de los datos.
+- **Funcionalidades**:
+    - **Vista General**: KPIs, serie temporal, mapa de la estación y tabla de datos crudos.
+    - **Análisis Avanzado**: 4 gráficas adicionales (Gauge, Barras, Heatmap, Box Plot) para descubrir patrones.
+    - **Explorador SQL**: Una consola para ejecutar consultas `SELECT` personalizadas directamente sobre la base de datos.
+    - **ETL Monitor**: Vista tipo panel operativo con ejecuciones, eventos y estado del pipeline sin usar Airflow.
 
-### 5. **Streamlit Dashboard**
-- Visualización de datos en tiempo real
-- Gráficos interactivos
-- Accesible en `http://localhost:8501`
-
-## � Guías por Rol
-
-### 🔧 Para Rivaldo (Backend)
-✅ **COMPLETADO** - Backend totalmente funcional
-- [Verificación de Rivaldo](DAMIAN_QUICK_START.md#verificación-rápida) en la guía de pruebas
-
-### 🎨 Para Damián (Frontend)
-⏳ **EN PROGRESO** - Tu dashboard Streamlit necesita ser construido
-
-📖 **Lee primero**: [DAMIAN_QUICK_START.md](DAMIAN_QUICK_START.md) (2 min)  
-📚 **Guía completa**: [DAMIAN_FRONTEND_GUIA.md](DAMIAN_FRONTEND_GUIA.md) (30 min)
+### 5. **ETL Regional**
+- **Modo por defecto**: `regional`
+- **Cobertura**: descubre estaciones por geografía para Guanajuato, Estado de México, CDMX, Querétaro e Hidalgo.
+- **Respaldo**: `legacy` conserva el flujo original de India si necesitas comparar resultados o depurar.
 
 ---
 
-## 🚀 Inicio Rápido (3 Comandos)
+## 🚀 Inicio Rápido (2 Pasos)
 
-```bash
-# 1. Clonar y navegar
-cd U1-Activity-3.-MQTT-Data-Ingestion-and-Visualization
+1.  **Configurar Variables de Entorno**:
+    *   Renombra el archivo `.env.example` a `.env`.
+    *   Abre el archivo `.env` y pega tu API Key de OpenAQ en la variable `OPENAQ_API_KEY`.
 
-# 2. Iniciar todos los servicios
-docker-compose up -d
+2.  **Iniciar todos los servicios con Docker Compose**:
+    ```bash
+    docker compose up --build
+    ```
+    *   El flag `--build` es importante para construir las imágenes con la configuración correcta la primera vez.
 
-# 3. Ejecutar el publisher
-python run_publisher.py
-# O desde Jupyter: jupyter notebook Project_Elements/publisher.ipynb
-```
-
-**¡Eso es! Ya está corriendo.** Los datos fluyen automáticamente.
+**¡Eso es todo!** El sistema está corriendo. El script de ingesta comenzará a poblar la base de datos y el dashboard estará disponible.
 
 ### Acceso a Servicios
 
-- 📊 **Streamlit Dashboard**: http://localhost:8501 (cuando Damián cree la app)
-- 🗄️ **PostgreSQL**: localhost:5432 (usuario: `user`, contraseña: `password`)
-- 📡 **MQTT Broker**: localhost:1883
+- 📊 **Streamlit Dashboard**: [http://localhost:8501](http://localhost:8501)
+- 🗄️ **PostgreSQL**: `localhost:5432` (usuario: `user`, contraseña: `password`, bd: `sensordata`)
 
-## 📁 Estructura del Proyecto
+## 📁 Estructura del Proyecto Clave
 
 ```
-U1-Activity-3.-MQTT-Data-Ingestion-and-Visualization/
-├── docker-compose.yml          # Orquestación Docker
-├── init.sql                    # Script SQL de inicialización
-├── .env.example                # Variables de entorno
-│
-├── mosquitto/
-│   └── mosquitto.conf          # Configuración del broker MQTT
-│
-├── Project_Elements/
-│   ├── publisher.ipynb         # Genera datos aleatorios
-│   ├── suscriber.ipynb         # Cliente MQTT (Jupyter)
-│   └── requirements.txt
-│
-├── subscriber/
-│   ├── Dockerfile              # Contenedor del servicio
-│   ├── subscriber.py           # Script del suscriptor
-│   └── requirements.txt
+U1_FinalProjectIoT_Dataset_Dashboard/
+├── docker-compose.yml          # Orquestación de todos los servicios Docker
+├── init.sql                    # Script de inicialización de la BD
+├── .env                        # Archivo para tus variables de entorno (API Key, etc.)
+├── run_publisher.py            # Script principal del servicio de ingesta (ETL)
+├── Dockerfile                  # Define la imagen para el servicio de ingesta
 │
 ├── streamlit_app/
-│   ├── Dockerfile
-│   ├── app.py                  # Dashboard principal
-│   └── requirements.txt
+│   ├── Dockerfile              # Define la imagen para el servicio de Streamlit
+│   ├── app.py                  # Código principal del dashboard
+│   └── utils/
+│       └── db_connection.py    # Lógica para conectar Streamlit a la BD
 │
 └── [Documentación]
     ├── README.md               # Este archivo
-    ├── QUICKSTART.md           # Inicio rápido
-    ├── CHANGELOG.md            # Cambios
-    └── COMPLETION_SUMMARY.md   # Resumen
+    ├── DISEÑO_DB.md            # Descripción detallada del esquema de la BD
+    ├── CONSULTAS_AVANZADAS.md  # Ejemplos de queries SQL complejas
+    └── ...
 ```
 
-## 🔧 Configuración
+## 🔧 Configuración (`.env`)
 
-### Variables de Entorno (`.env`)
+Asegúrate de que tu archivo `.env` contenga lo siguiente:
 
 ```env
-# PostgreSQL
+# API Key para la API de OpenAQ
+OPENAQ_API_KEY=TU_API_KEY_AQUI
+
+# Configuración de la Base de Datos (usada por los scripts y Streamlit)
 DB_HOST=postgres_db
 DB_PORT=5432
 DB_NAME=sensordata
 DB_USER=user
 DB_PASSWORD=password
 
-# MQTT Mosquitto
-MQTT_BROKER=mosquitto
-MQTT_PORT=1883
-MQTT_USER=           # Dejar vacío
-MQTT_PASS=           # Dejar vacío
-MQTT_TOPIC=#
-
-# Streamlit
-STREAMLIT_PORT=8501
-```
-
-### Credenciales por Defecto
-
-```
-PostgreSQL:
-  • Usuario: user
-  • Contraseña: password
-  • DB: sensordata
-
-Mosquitto:
-  • Sin autenticación (es desarrollo)
-  • Puerto: 1883
+# Control de extracción
+EXTRACTION_MODE=regional
+OPENAQ_LOOKBACK_DAYS=7
 ```
 
 ## 🐳 Comandos Docker Principales
 
 ```bash
-# Iniciar servicios
-docker-compose up -d
+# Construir e iniciar todos los servicios en segundo plano
+docker compose up -d --build
 
-# Ver logs
-docker-compose logs -f
+# Ver logs de todos los servicios
+docker compose logs -f
 
-# Ver logs de un servicio
-docker-compose logs -f subscriber
+# Ver logs de un servicio específico (ej. streamlit)
+docker compose logs -f streamlit
 
-# Detener servicios
-docker-compose down
+# Detener todos los servicios
+docker compose down
 
-# Reiniciar
-docker-compose restart
-
-# Estado de servicios
-docker-compose ps
+# Detener servicios y eliminar volúmenes de datos (reinicio limpio)
+docker compose down --volumes
 ```
 
-## 📊 SQL Queries Útiles
+## 📊 SQL Queries de Ejemplo
 
+Estas consultas se pueden ejecutar en la pestaña "Explorador SQL" del dashboard.
+
+### Resumen por Contaminante
 ```sql
--- Ver datos enteros recientes
-SELECT * FROM lake_raw_data_int 
-ORDER BY timestamp DESC LIMIT 10;
-
--- Ver datos flotantes recientes
-SELECT * FROM lake_raw_data_float 
-ORDER BY timestamp DESC LIMIT 10;
-
--- Contar registros
-SELECT COUNT(*) FROM lake_raw_data_int;
-SELECT COUNT(*) FROM lake_raw_data_float;
-
--- Estadísticas
-SELECT 
-  COUNT(*) as total,
-  AVG(value) as promedio,
-  MIN(value) as minimo,
-  MAX(value) as maximo
-FROM lake_raw_data_int;
-
--- Ver últimas 5 inserciones
-SELECT * FROM events_log ORDER BY timestamp DESC LIMIT 5;
+SELECT
+    p.display_name AS contaminante,
+    p.units AS unidades,
+    COUNT(fm.value) AS total_mediciones,
+    ROUND(AVG(fm.value)::numeric, 2) AS promedio_valor
+FROM fact_measurements fm
+JOIN dim_parameters p ON fm.parameter_id = p.id
+GROUP BY p.display_name, p.units
+ORDER BY contaminante;
 ```
 
-## 🔌 Acceder a PostgreSQL Directamente
-
-```bash
-# Desde Docker
-docker-compose exec postgres_db psql -U user -d sensordata
-
-# Desde tu computadora (si tienes psql instalado)
-psql -h localhost -U user -d sensordata
-# Contraseña: password
-```
-
-## 📈 Flujo de Datos
-
-```
-1. Publisher genera un dato aleatorio
-2. Publica en MQTT Broker (Mosquitto)
-3. Subscriber escucha el evento
-4. Subscriber inserta en PostgreSQL
-5. Streamlit lee de PostgreSQL
-6. Dashboard muestra el dato en tiempo real
+### Comparación con Medición Anterior
+```sql
+SELECT
+    timestamp_utc,
+    value AS valor_actual,
+    LAG(value, 1) OVER (ORDER BY timestamp_utc) AS valor_anterior
+FROM fact_measurements
+WHERE parameter_id = 2 -- PM2.5
+ORDER BY timestamp_utc DESC
+LIMIT 100;
 ```
 
 ## 🐛 Solución de Problemas
 
-### Error: "Connection refused"
-```bash
-# Verificar que los servicios están corriendo
-docker-compose ps
+### Error: "cannot allocate memory" durante `docker compose up --build`
+- **Causa**: Docker no tiene suficiente RAM para compilar dependencias.
+- **Solución**: Se ha optimizado el `Dockerfile` para no instalar `gcc`, lo que resuelve este problema. Si persiste, aumenta la memoria asignada a Docker Desktop en `Settings > Resources`.
 
-# Si no están, iniciar
-docker-compose up -d
-```
+### Dashboard sin datos o con el error "No hay parámetros disponibles"
+- **Causa**: El script de ingesta aún no ha cargado datos.
+- **Solución**: Espera 1-2 minutos después de iniciar los contenedores para que el primer ciclo de ingesta se complete. Refresca la página del dashboard.
 
-### Error: "Cannot connect to MQTT"
-```bash
-# Verificar Mosquitto está corriendo
-docker-compose logs mosquitto
+### Error de Conexión a la Base de Datos desde Streamlit
+- **Causa**: El contenedor de Streamlit inició antes de que la base de datos estuviera lista.
+- **Solución**: El `docker-compose.yml` está configurado con `depends_on` y `healthcheck` para evitar esto. Un `docker compose restart streamlit` debería solucionarlo si ocurre.
 
-# Reiniciar Mosquitto
-docker-compose restart mosquitto
-```
-
-### Error: "Database does not exist"
-```bash
-# Las tablas se crean automáticamente con init.sql
-# Si no, reinicia PostgreSQL
-docker-compose restart postgres_db
-```
-
-### Datos no aparecen en Streamlit
-```bash
-# Verificar que subscriber está activo
-docker-compose logs subscriber -f
-
-# Verificar que hay datos en DB
-docker-compose exec postgres_db psql -U user -d sensordata -c "SELECT COUNT(*) FROM lake_raw_data_int"
-```
-
-## 🚀 Expandir el Proyecto
-
-### Agregar más tópicos MQTT
-Edita `Project_Elements/publisher.ipynb` para publicar en nuevos tópicos.
-
-### Agregar más gráficos
-Edita `streamlit_app/app.py` para agregar visualizaciones.
-
-### Cambiar credenciales de BD
-Edita `docker-compose.yml` y `.env`.
-
-## 📚 Documentación Adicional
-
-- **QUICKSTART.md** - Guía de 5 pasos
-- **CHANGELOG.md** - Qué cambió
-- **COMPLETION_SUMMARY.md** - Resumen de trabajo completado
-- **ElementosClaveParaLevantarTodo.md** - Instrucciones SQL detalladas
-
-## 🎓 Para Aprender
-
-Este proyecto demuestra:
-- ✅ Arquitectura IoT moderna
-- ✅ Brokers MQTT (Mosquitto)
-- ✅ Bases de datos relacional (PostgreSQL)
-- ✅ Docker y contenedores
-- ✅ Python para backend
-- ✅ Streamlit para dashboards
-- ✅ Desarrollo ágil
-
-## 📝 Notas Importantes
-
-- **Desarrollo local**: Todo corre en tu computadora
-- **Sin dependencias externas**: No necesitas internet
-- **Fácil de expandir**: Agregar sensores es simple
-- **Listo para clase**: Documentado y probado
-- **Open Source**: Puedes modificar todo
+## 🎓 Este Proyecto Demuestra
+- ✅ Diseño de un pipeline de datos real (ETL).
+- ✅ Consumo de una API externa (OpenAQ).
+- ✅ Diseño de base de datos con un modelo dimensional (esquema de estrella).
+- ✅ Orquestación de microservicios con Docker Compose.
+- ✅ Desarrollo de un dashboard interactivo y analítico con Streamlit.
+- ✅ Uso de SQL avanzado (JOINs, Funciones de Ventana, Agregaciones).
 
 ---
 
-**Estado**: ✅ Producción Ready (Escolar)
+**Estado**: ✅ Listo para Producción (Nivel Educativo)
 **Última actualización**: Febrero 2026
-**Diseño**: Proyecto educativo
+**Diseño**: Proyecto Final de IoT
 
-¡Listo para usar! 🎉
-
+¡Listo para desplegar y presentar! 🎉
